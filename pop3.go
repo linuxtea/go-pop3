@@ -2,11 +2,13 @@
 package pop3
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -44,6 +46,70 @@ func Dial(addr string) (*Client, error) {
 	}
 
 	return NewClient(conn)
+}
+func DialWithDialer(timedeadline int64, dialer *net.Dialer, address string) (c *Client, err error) {
+	conn, err := dialer.Dial("tcp", address)
+	if err != nil {
+		return nil, err
+	}
+
+	// We don't return to the caller until we try to receive a greeting. As such,
+	// there is no way to set the client's Timeout for that action. As a
+	// workaround, if the dialer has a timeout set, use that for the connection's
+	// deadline.
+	// if !dialer.Deadline.IsZero() {
+	// 	err = conn.SetDeadline(dialer.Deadline)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// }
+	err = conn.SetDeadline(time.Now().Add(time.Duration(timedeadline) * time.Second))
+	if err != nil {
+		return
+	}
+	// if dialer.Timeout > 0 {
+	// 	err = conn.SetReadDeadline(time.Now().Add(dialer.Timeout))
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// }
+	c, err = NewClient(conn)
+	return
+}
+
+// DialTLS creates a TLS-secured connection to the POP3 server at the given
+// address and returns the corresponding Client.
+func DialTLS(addr string) (*Client, error) {
+	conn, err := tls.Dial("tcp", addr, nil)
+	if err != nil {
+		return nil, err
+	}
+	return NewClient(conn)
+}
+func DialWithDialerTLS(timedeadline int64, dialer *net.Dialer, addr string,
+	tlsConfig *tls.Config) (c *Client, err error) {
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	if err != nil {
+		return
+	}
+	err = conn.SetDeadline(time.Now().Add(time.Duration(timedeadline) * time.Second))
+	if err != nil {
+		return
+	}
+	// if !dialer.Deadline.IsZero() {
+	// 	err = conn.SetDeadline(dialer.Deadline)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// }
+	// if dialer.Timeout > 0 {
+	// 	err = conn.SetReadDeadline(time.Now().Add(dialer.Timeout))
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// }
+	c, err = NewClient(conn)
+	return
 }
 
 // NewClient returns a new Client using an existing connection.
